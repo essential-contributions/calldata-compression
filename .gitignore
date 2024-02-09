@@ -1,0 +1,23 @@
+# Compiler files
+cache/
+cache_hardhat/
+out/
+artifacts/
+typechain/
+/data/
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+
+# Coverage file
+lcov.info
+coverage/
+
+# Environment config
+.vscode/
+
+# Node
+node_modules

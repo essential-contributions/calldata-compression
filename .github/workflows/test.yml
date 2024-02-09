@@ -1,0 +1,55 @@
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request: null
+  workflow_dispatch: null
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  trunk:
+    name: Trunk project
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Run Trunk check
+        uses: trunk-io/trunk-action@v1
+        id: trunk-check
+
+  hardhat:
+    name: Hardhat project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install packages
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+
+      - name: Install Hardhat
+        run: |
+          npm ci
+
+      - name: Run Hardhat build
+        run: |
+          npx hardhat compile
+        id: hardhat-build
+
+      - name: Run Hardhat tests
+        run: |
+          npx hardhat test
+        id: hardhat-test
