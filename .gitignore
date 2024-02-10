@@ -4,7 +4,8 @@ cache_hardhat/
 out/
 artifacts/
 typechain/
-/data/
+/data/data_*
+/data/analysis_*
 
 # Docs
 docs/

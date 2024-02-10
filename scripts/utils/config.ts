@@ -1,6 +1,7 @@
 // Scripts Configuration
 export const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789';
 export const DATA_DIRECTORY_NAME = 'data';
+export const L1_FILE_NAME_PREFIX = 'l1';
 export const DATA_FILE_NAME_PREFIX = 'data';
 export const ANALYSIS_FILE_NAME_PREFIX = 'analysis';
 
