@@ -3,6 +3,7 @@ import '@nomicfoundation/hardhat-toolbox';
 import 'dotenv/config';
 
 const ARBITRUM_URL = process.env.ARBITRUM_URL || '';
+const BASE_URL = process.env.BASE_URL || '';
 const OPTIMISM_URL = process.env.OPTIMISM_URL || '';
 
 const config: HardhatUserConfig = {
@@ -11,6 +12,9 @@ const config: HardhatUserConfig = {
     hardhat: {},
     arbitrum: {
       url: ARBITRUM_URL,
+    },
+    base: {
+      url: BASE_URL,
     },
     optimism: {
       url: OPTIMISM_URL,

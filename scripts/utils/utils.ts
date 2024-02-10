@@ -6,6 +6,9 @@ import {
   ANALYSIS_FILE_NAME_PREFIX,
   ARB_DATA_PRICE,
   ARB_GAS_PRICE,
+  BASE_DATA_PRICE,
+  BASE_DATA_SCALER,
+  BASE_GAS_PRICE,
   DATA_DIRECTORY_NAME,
   DATA_FILE_NAME_PREFIX,
   ENTRY_POINT_ADDRESS,
@@ -55,7 +58,7 @@ export async function loadData(network: string): Promise<{ data: HandleUserOpCal
   const datas: FetchedHandleUserOpCalls[] = [];
   try {
     const file = JSON.parse(
-      await fs.readFile(path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${network}.json`), 'utf8')
+      await fs.readFile(path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${network}.json`), 'utf8'),
     );
     datas.push(...file);
   } catch (err) {}
@@ -67,7 +70,7 @@ export async function loadData(network: string): Promise<{ data: HandleUserOpCal
 }
 export async function recommendDictionaries(
   network: string,
-  daysSampled: number
+  daysSampled: number,
 ): Promise<{ l1: string[]; l2: string[]; l3: string[] }> {
   const analysis: DataAnalysis = {
     contracts: [],
@@ -80,7 +83,7 @@ export async function recommendDictionaries(
   };
   try {
     const file = JSON.parse(
-      await fs.readFile(path.join(DATA_DIRECTORY, `${ANALYSIS_FILE_NAME_PREFIX}_${network}.json`), 'utf8')
+      await fs.readFile(path.join(DATA_DIRECTORY, `${ANALYSIS_FILE_NAME_PREFIX}_${network}.json`), 'utf8'),
     );
     analysis.contracts.push(...file.contracts);
     analysis.accounts.push(...file.accounts);
@@ -95,7 +98,7 @@ export async function recommendDictionaries(
   const dictionaryListL1: string[] = [];
   try {
     const file = JSON.parse(
-      await fs.readFile(path.join(DATA_DIRECTORY, `${L1_FILE_NAME_PREFIX}_${network}.json`), 'utf8')
+      await fs.readFile(path.join(DATA_DIRECTORY, `${L1_FILE_NAME_PREFIX}_${network}.json`), 'utf8'),
     );
     dictionaryListL1.push(...file);
   } catch (err) {}
@@ -198,7 +201,7 @@ export function calcL1Gas(data: string, net: string): bigint {
     const dataLength = compressed ? compressed.length : data.length;
     return BigInt(dataLength * 16);
   }
-  if (net == 'optimism') {
+  if (net == 'base' || net == 'optimism') {
     let gas = 0n;
     for (let i = 2; i < data.length; i += 2) {
       const byte = data.substring(i, i + 2);
@@ -213,6 +216,12 @@ export function priceL1Gas(gas: bigint | number, net: string): number {
   if (net == 'arbitrum') {
     return Math.round(Number((BigInt(gas) * BigInt(ARB_DATA_PRICE) * BigInt(ETH_PRICE)) / 1_000n)) / 1_000_000;
   }
+  if (net == 'base') {
+    return (
+      Math.round(Number((BigInt(gas) * BigInt(BASE_DATA_PRICE) * BigInt(ETH_PRICE)) / 1_000n) * BASE_DATA_SCALER) /
+      1_000_000
+    );
+  }
   if (net == 'optimism') {
     return (
       Math.round(Number((BigInt(gas) * BigInt(OP_DATA_PRICE) * BigInt(ETH_PRICE)) / 1_000n) * OP_DATA_SCALER) /
@@ -224,6 +233,9 @@ export function priceL1Gas(gas: bigint | number, net: string): number {
 export function priceL2Gas(gas: bigint | number, net: string): number {
   if (net == 'arbitrum') {
     return Math.round((Number(gas) * ARB_GAS_PRICE * ETH_PRICE) / 1_000) / 1_000_000;
+  }
+  if (net == 'base') {
+    return Math.round((Number(gas) * BASE_GAS_PRICE * ETH_PRICE) / 1_000) / 1_000_000;
   }
   if (net == 'optimism') {
     return Math.round((Number(gas) * OP_GAS_PRICE * ETH_PRICE) / 1_000) / 1_000_000;

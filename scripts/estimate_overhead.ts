@@ -1,5 +1,4 @@
 import hre from 'hardhat';
-import { ContractTransactionResponse } from 'ethers';
 import {
   calcL1Gas,
   formatTime,
@@ -23,7 +22,7 @@ import { CalldataCompression } from './library/calldataCompression';
 import { ENTRY_POINT_ADDRESS } from './utils/config';
 
 const NUM_SAMPLES = 100;
-const SAMPLE_FROM_NETWORKS = ['arbitrum', 'optimism'];
+const SAMPLE_FROM_NETWORKS = ['arbitrum', 'base', 'optimism'];
 
 // Main script entry
 async function main() {
@@ -91,13 +90,13 @@ async function main() {
       dictionaries.l1,
       [multiplesRegistryAddress, ...staticRegistryAddresses],
       publicRegistryAddress,
-      deployer
+      deployer,
     );
     const calldataCompressionBytes = await generateGeneralCalldataCompressionDeployCode(
       entrypointAddress,
       dictionaries.l1,
       [multiplesRegistryAddress, ...staticRegistryAddresses],
-      publicRegistryAddress
+      publicRegistryAddress,
     );
     const calldataCompressionAddress = await calldataCompression.getAddress();
 
