@@ -97,3 +97,7 @@ The best way to see how the compression process works is to look over the [compr
 ```
 npm run test
 ```
+
+## Current Chain Analysis
+
+View the latest report of running these scripts on Arbitrum, Base and Optimism [here](./METRICS.md).
