@@ -14,8 +14,16 @@ contract EntryPointTester is IEntryPoint {
         _length = length;
     }
 
-    function handleOps(UserOperation[] calldata ops, address payable /*beneficiary*/ ) external {
-        result = keccak256(abi.encode(ops));
+    function handleOps(UserOperation[] calldata, /*ops*/ address payable /*beneficiary*/ ) external {
+        bytes memory data;
+        assembly {
+            let size := calldatasize()
+            data := mload(0x40)
+            mstore(data, size)
+            calldatacopy(add(data, 32), 0, size)
+            mstore(0x40, add(data, add(size, 32)))
+        }
+        result = keccak256(data);
     }
 
     function handleAggregatedOps(UserOpsPerAggregator[] calldata, /*opsPerAggregator*/ address payable /*beneficiary*/ )
