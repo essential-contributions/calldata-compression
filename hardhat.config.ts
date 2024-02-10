@@ -2,20 +2,18 @@ import { HardhatUserConfig } from 'hardhat/config';
 import '@nomicfoundation/hardhat-toolbox';
 import 'dotenv/config';
 
-const INFURA_KEY = process.env.INFURA_KEY || '';
+const ARBITRUM_URL = process.env.ARBITRUM_URL || '';
+const OPTIMISM_URL = process.env.OPTIMISM_URL || '';
 
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
   networks: {
     hardhat: {},
-    polygon: {
-      url: 'https://polygon-mainnet.infura.io/v3/' + INFURA_KEY,
+    arbitrum: {
+      url: ARBITRUM_URL,
     },
     optimism: {
-      url: 'https://optimism-mainnet.infura.io/v3/' + INFURA_KEY,
-    },
-    arbitrum: {
-      url: 'https://arbitrum-mainnet.infura.io/v3/' + INFURA_KEY,
+      url: OPTIMISM_URL,
     },
   },
   solidity: {
