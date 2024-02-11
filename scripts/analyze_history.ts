@@ -19,6 +19,7 @@ async function main() {
   const signer = new hre.ethers.Wallet(hre.ethers.hexlify(hre.ethers.randomBytes(32))).connect(provider);
   const { data, daysSampled } = await loadData(hre.network.name);
   const dictionaries = await recommendDictionaries(hre.network.name, daysSampled);
+  data.sort((a, b) => a.blockTimestamp - b.blockTimestamp);
 
   //get compression results
   const compression = new CompressionTest();
