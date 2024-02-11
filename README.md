@@ -1,6 +1,6 @@
 # Essential Calldata Compression
 
-Generalized calldata compression strategy aimed at making account abstraction more approachable on rollups with a specific interest in ERC-4337. Keep reading to find out how the strategy works, or...
+Generalized calldata compression strategy aimed at making account abstraction more approachable on rollups. This strategy can be applied to any contract, but the analysis scripts pay particular attention to ERC-4337 as an example. This is intended to serve as an immediate generalized first step towards acheiving even more copression in the future. Keep reading to find out how the strategy works, or...
 
 [**Jump Here**](./METRICS.md) to see how applying this strategy today can achieve a 75% or more reduction in _gas costs_ (over 85% data reduction).
 

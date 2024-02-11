@@ -22,8 +22,8 @@ These are the results of the analysis for Arbitrum, Base and Optimism chains if 
 
 | Chain    | Dictionary Sizes        | Avg Est. Execution Overhead per UserOp | L1 Gas Savings (30 days) | Batched Savings (5min Batching)\* |
 | -------- | ----------------------- | -------------------------------------- | ------------------------ | --------------------------------- |
-| Arbitrum | L1:32, L2:2628, L3:7504 | 45016 ($0.00041)                       | 1.25% ($479.61)          |                                   |
-| Base     | L1:32, L2:579, L3:8043  | 37698 ($0.00034)                       | 44.48% ($3195.01)        |                                   |
+| Arbitrum | L1:32, L2:2628, L3:7504 | 45016 ($0.00041)                       | 1.25% ($479.61)          | 11.53% (batch size of 7.6)        |
+| Base     | L1:32, L2:579, L3:8043  | 37698 ($0.00034)                       | 44.48% ($3195.01)        | 53.51% (batch size of 4.25)       |
 | Optimism | L1:32, L2:422, L3:4125  | 40147 ($0.00036)                       | 51.32% ($5615.02)        | 59.29% (batch size of 3.73)       |
 
 \*The amount of savings if userOps were batched every 5 minutes (max of 12)
@@ -32,8 +32,8 @@ These are the results of the analysis for Arbitrum, Base and Optimism chains if 
 
 | Chain    | Now    | w/ Essential Compression | w/ Compression and Batching | Theoretical Ideal Compression\* |
 | -------- | ------ | ------------------------ | --------------------------- | ------------------------------- |
-| Arbitrum | $0.784 | $0.774                   |                             | $0.183                          |
-| Base     | $0.505 | $0.28                    |                             | $0.124                          |
+| Arbitrum | $0.784 | $0.774                   | $0.379                      | $0.183                          |
+| Base     | $0.505 | $0.28                    | $0.193                      | $0.124                          |
 | Optimism | $0.60  | $0.29                    | $0.21                       | $0.153                          |
 
 \*Compression that assumes being able to make batches of 8 where each userOp is of a similar construction
@@ -72,9 +72,20 @@ Each userOp adds an average of 45016 gas to total execution cost ($0.00041)
 
 Further compression is possible simply by including more userOps in the same _handleOps_ bundle
 
-| Title              | Value |
-| ------------------ | ----- |
-| Average Batch Size | 3.73  |
+| Title                              | Value     |
+| ---------------------------------- | --------- |
+| Average Batch Size                 | 7.6       |
+|                                    |           |
+| Average L1 gas savings             | 11.53%    |
+| Max L1 gas savings                 | 41.07%    |
+| Min L1 gas savings                 | -84.07%   |
+|                                    |           |
+| Hypothetical L1 gas costs          | $20998.34 |
+| L1 gas costs w/ compression        | $18577.74 |
+| Hypothetical L1 gas cost savings   | $2420.6   |
+|                                    |           |
+| Average L1 gas cost per op         | $0.429    |
+| Average L1 gas cost w/ compression | $0.379    |
 
 **Applying Compression to Hypothetical Ideal Bundles**
 
@@ -82,20 +93,20 @@ Even more compression is possible if a bundler can expect a batch of 8 userOps o
 
 | Title                              | Value     |
 | ---------------------------------- | --------- |
-| Average L1 gas savings             | 13.48%    |
-| Max L1 gas savings                 | 25.92%    |
-| Min L1 gas savings                 | -3.04%    |
+| Average L1 gas savings             | 13.49%    |
+| Max L1 gas savings                 | 24.62%    |
+| Min L1 gas savings                 | 3.88%     |
 |                                    |           |
-| Hypothetical L1 gas costs          | $10354.07 |
-| L1 gas costs w/ compression        | $8958.53  |
-| L1 gas cost savings                | $1395.54  |
+| Hypothetical L1 gas costs          | $10317.72 |
+| L1 gas costs w/ compression        | $8925.46  |
+| L1 gas cost savings                | $1392.26  |
 |                                    |           |
 | Average L1 gas cost per op         | $0.211    |
-| Average L1 gas cost w/ compression | $0.183    |
+| Average L1 gas cost w/ compression | $0.182    |
 
 ## Base
 
-Base is very well suited to take advantage of this compression technique since transactions are not credited for how compressible their data is compared to others. This leads to an immediate savings of over 50% even when just applying to current _handleOps_ calls where typically there is only ever 1 userOp per call.
+Base is very well suited to take advantage of this compression technique since transactions are not credited for how compressible their data is compared to others. This leads to an immediate savings of almost 50% even when just applying to current _handleOps_ calls where typically there is only ever 1 userOp per call.
 
 **Execution Gas Overhead For On-Chain Decompression:**
 
@@ -120,9 +131,20 @@ Each userOp adds an average of 37698 gas to total execution cost ($0.00034)
 
 Further compression is possible simply by including more userOps in the same _handleOps_ bundle
 
-| Title              | Value |
-| ------------------ | ----- |
-| Average Batch Size | 3.73  |
+| Title                              | Value    |
+| ---------------------------------- | -------- |
+| Average Batch Size                 | 4.25     |
+|                                    |          |
+| Average L1 gas savings             | 53.51%   |
+| Max L1 gas savings                 | 80.86%   |
+| Min L1 gas savings                 | 15.58%   |
+|                                    |          |
+| Hypothetical L1 gas costs          | $5920.52 |
+| L1 gas costs w/ compression        | $2752.7  |
+| Hypothetical L1 gas cost savings   | $3167.82 |
+|                                    |          |
+| Average L1 gas cost per op         | $0.416   |
+| Average L1 gas cost w/ compression | $0.193   |
 
 **Applying Compression to Hypothetical Ideal Bundles**
 
@@ -130,16 +152,16 @@ Even more compression is possible if a bundler can expect a batch of 8 userOps o
 
 | Title                              | Value    |
 | ---------------------------------- | -------- |
-| Average L1 gas savings             | 69.39%   |
-| Max L1 gas savings                 | 82.47%   |
+| Average L1 gas savings             | 69.4%    |
+| Max L1 gas savings                 | 82.6%    |
 | Min L1 gas savings                 | 36.46%   |
 |                                    |          |
-| Hypothetical L1 gas costs          | $5744.95 |
-| L1 gas costs w/ compression        | $1758.38 |
-| L1 gas cost savings                | $3986.57 |
+| Hypothetical L1 gas costs          | $5715.39 |
+| L1 gas costs w/ compression        | $1749.18 |
+| L1 gas cost savings                | $3966.21 |
 |                                    |          |
-| Average L1 gas cost per op         | $0.404   |
-| Average L1 gas cost w/ compression | $0.124   |
+| Average L1 gas cost per op         | $0.402   |
+| Average L1 gas cost w/ compression | $0.123   |
 
 ## Optimism
 
