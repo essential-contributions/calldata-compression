@@ -5,10 +5,10 @@ Generalized calldata compression strategy aimed at making account abstraction mo
 ### Contents
 
 1. [Chain Analysis Overview](#chain-analysis-overview)
-1. [Strategy](#strategy)
+2. [Strategy](#strategy)
    - [Encoding](#encoding)
    - [Tiered Dictionaries](#tiered-dictionaries)
-1. [Running Scripts](#running-scripts-for-current-chain-analysis)
+3. [Running Scripts](#running-scripts-for-current-chain-analysis)
    - [Collect Data](#collect-data)
    - [Process Data](#process-data)
    - [Historical Analysis](#historical-analysis)
