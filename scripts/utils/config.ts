@@ -4,6 +4,8 @@ export const DATA_DIRECTORY_NAME = 'data';
 export const L1_FILE_NAME_PREFIX = 'l1';
 export const DATA_FILE_NAME_PREFIX = 'data';
 export const ANALYSIS_FILE_NAME_PREFIX = 'analysis';
+export const SIGNATURES_4BYTE_FILE_NAME = '4byte_signatures';
+export const FUNCTION_SIGNATURES_FILE = 'scripts/library/data/function_signatures.json';
 
 // Pricing
 export const ETH_PRICE = 2250;

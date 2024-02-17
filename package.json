@@ -9,6 +9,7 @@
   "scripts": {
     "test": "npx hardhat test",
     "estimate_overhead": "npx hardhat run ./scripts/estimate_overhead.ts --network hardhat",
+    "4byte_signatures": "npx hardhat run ./scripts/4byte_signatures_fetch.ts --network hardhat",
     "data:arbitrum": "npx hardhat run ./scripts/data_dump.ts --network arbitrum",
     "data:base": "npx hardhat run ./scripts/data_dump.ts --network base",
     "data:optimism": "npx hardhat run ./scripts/data_dump.ts --network optimism",

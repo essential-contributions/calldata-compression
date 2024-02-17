@@ -6,6 +6,7 @@ artifacts/
 typechain/
 /data/data_*
 /data/analysis_*
+/data/4byte_signatures*
 
 # Docs
 docs/

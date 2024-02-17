@@ -6,15 +6,15 @@ import { DATA_DIRECTORY_NAME, DATA_FILE_NAME_PREFIX, ENTRY_POINT_ADDRESS } from 
 import { FetchedHandleUserOpCalls, HandleUserOpCall, round } from './utils/utils';
 import { IEntryPoint } from '../typechain';
 
-const NUM_DAYS_TO_FETCH = 30;
+const NUM_DAYS_TO_FETCH = 90;
 const MAX_BLOCKS_TO_FETCH_LOGS = 1_000;
-const MAX_OVERALL_QUERIES = 15_000;
+const MAX_OVERALL_QUERIES = 25_000;
 const DATA_DIRECTORY = path.join(process.cwd(), DATA_DIRECTORY_NAME);
 
 // Main script entry
 async function main() {
   console.log(
-    `Pulling the last ${NUM_DAYS_TO_FETCH} days of ERC-4337 EntryPoint_v0.6.0 transaction data for ${hre.network.name}...`
+    `Pulling the last ${NUM_DAYS_TO_FETCH} days of ERC-4337 EntryPoint_v0.6.0 transaction data for ${hre.network.name}...`,
   );
   const provider = hre.ethers.provider;
   const signer = new hre.ethers.Wallet(hre.ethers.hexlify(hre.ethers.randomBytes(32))).connect(provider);
@@ -30,7 +30,7 @@ async function main() {
       fs.mkdir(DATA_DIRECTORY);
     }
     const file = JSON.parse(
-      await fs.readFile(path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${hre.network.name}.json`), 'utf8')
+      await fs.readFile(path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${hre.network.name}.json`), 'utf8'),
     );
     data.push(...file);
   } catch (err) {}
@@ -48,7 +48,7 @@ async function main() {
       currentBlock.timestamp,
       currentBlock.number,
       bottomBlockTimestamp,
-      queryCount
+      queryCount,
     );
     data = [
       {
@@ -68,7 +68,7 @@ async function main() {
       data[0].fromBlockTimestamp,
       data[0].fromBlock,
       bottomBlockTimestamp,
-      queryCount
+      queryCount,
     );
     const handleOpsCalls: Map<string, HandleUserOpCall> = new Map<string, HandleUserOpCall>();
     for (let handleOpsCall of data[0].handleOpsCalls) handleOpsCalls.set(handleOpsCall.hash, handleOpsCall);
@@ -88,7 +88,7 @@ async function main() {
   console.log(`Writting data to file...`);
   await fs.writeFile(
     path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${hre.network.name}.json`),
-    JSON.stringify(data, null, 2)
+    JSON.stringify(data, null, 2),
   );
 }
 
@@ -99,7 +99,7 @@ async function fetchData(
   topBlockTimestamp: number,
   topBlockNumber: number,
   bottomBlockTimestamp: number,
-  queryCount: number
+  queryCount: number,
 ): Promise<{
   handleOpsCalls: Map<string, HandleUserOpCall>;
   fromBlock: number;
@@ -156,7 +156,7 @@ async function fetchData(
       }
       if (queryCount >= MAX_OVERALL_QUERIES) {
         console.log(
-          `Stopping here since since the max number of queries has been hit (${MAX_OVERALL_QUERIES}). Run script again to continue.`
+          `Stopping here since since the max number of queries has been hit (${MAX_OVERALL_QUERIES}). Run script again to continue.`,
         );
         return {
           handleOpsCalls,
@@ -170,7 +170,7 @@ async function fetchData(
     }
     if (queryCount >= MAX_OVERALL_QUERIES) {
       console.log(
-        `Stopping here since since the max number of queries has been hit (${MAX_OVERALL_QUERIES}). Run script again to continue.`
+        `Stopping here since since the max number of queries has been hit (${MAX_OVERALL_QUERIES}). Run script again to continue.`,
       );
       return {
         handleOpsCalls,

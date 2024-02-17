@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { breakdownCalldata, initCalldataUtils } from './calldataUtils';
 
 // Encoding Prefixes
 // 000 - 1 byte dynamic dictionary [1-32] (items to put in storage)
@@ -26,6 +27,27 @@ export class CompressionCore {
   protected twoByteDictionary: Map<string, number> = new Map<string, number>();
   protected fourByteDictionary: Map<string, number> = new Map<string, number>();
 
+  // Encodes the given array of bytes quickly, but may not be the most compressed
+  public encodeFast(bytes: string, l3DictionaryEnabled: boolean = true): string {
+    let hexPrefix = false;
+    if (bytes.indexOf('0x') == 0) {
+      hexPrefix = true;
+      bytes = bytes.substring(2);
+    }
+
+    //encode via chunks
+    const encoded: string[] = [];
+    const chunks = breakdownCalldata(bytes);
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks[i].data.length <= 64) encoded.push(...this.doEncode(chunks[i].data, l3DictionaryEnabled));
+      else encoded.push(...this.optimalEncode(chunks[i].data, l3DictionaryEnabled));
+    }
+
+    //finish encoding with dynamic dictionary
+    let encodedString = this.compileWithDynamicDictionary(encoded);
+    return (hexPrefix ? '0x' : '') + encodedString;
+  }
+
   // Encodes the given array of bytes
   public encode(bytes: string, l3DictionaryEnabled: boolean = true): string {
     let hexPrefix = false;
@@ -33,72 +55,12 @@ export class CompressionCore {
       hexPrefix = true;
       bytes = bytes.substring(2);
     }
-    const root = this;
-    const encodingResults = new Map<string, string[]>();
-    function encodeSingle(bytes: string): string[] {
-      if (!encodingResults.has(bytes)) {
-        encodingResults.set(bytes, root.doEncode(bytes, l3DictionaryEnabled));
-      }
-      return encodingResults.get(bytes) ?? [];
-    }
-
-    const encodingAtIndex = new Map<number, string[]>();
-    function encodeRecursive(index: number): string[] {
-      if (index >= bytes.length) return [];
-      if (!encodingAtIndex.has(index)) {
-        let smallestEncoding: string[] | undefined;
-        for (let i = 64; i > 0; i -= 2) {
-          if (index + i <= bytes.length) {
-            const encoding = [...encodeSingle(bytes.substring(index, index + i)), ...encodeRecursive(index + i)];
-            if (!smallestEncoding || encoding.join('').length < smallestEncoding.join('').length) {
-              smallestEncoding = encoding;
-            }
-          }
-        }
-        encodingAtIndex.set(index, smallestEncoding ?? []);
-      }
-      return encodingAtIndex.get(index) ?? [];
-    }
-
-    //prefill encoding results
-    for (let i = 0; i < bytes.length; i += 2) {
-      for (let j = 64; j > 0; j -= 2) {
-        if (i + j <= bytes.length) encodeSingle(bytes.substring(i, i + j));
-      }
-    }
-    for (let i = bytes.length - 2; i > 0; i -= 2) encodeRecursive(i);
 
     //get plain encoding
-    const encoded = encodeRecursive(0);
-
-    //build dynamic dictionary
-    const items = new Map<string, number>();
-    for (let enc of encoded) {
-      if (items.has(enc)) items.set(enc, (items.get(enc) ?? 0) + (enc.length / 2 - 1));
-      else items.set(enc, -1);
-    }
-    const sorted = [...items.entries()].sort((a, b) => b[1] - a[1]);
-    const dictionary: string[] = [];
-    for (let i = 0; i < 32; i++) {
-      if (i < sorted.length) {
-        if (sorted[i][1] > 0) dictionary.push(sorted[i][0]);
-        else break;
-      }
-    }
-
-    //TODO: mark dynamic dictionary items for storage
+    const encoded = this.optimalEncode(bytes, l3DictionaryEnabled);
 
     //finish encoding with dynamic dictionary
-    let encodedString = toHex(dictionary.length, 1);
-    for (let ent of dictionary) {
-      encodedString += ent;
-    }
-    for (let enc of encoded) {
-      const dictRef = dictionary.indexOf(enc);
-      if (dictRef > -1) encodedString += toHex(PF_1BYTE_DICT + dictRef, 1);
-      else encodedString += enc;
-    }
-
+    let encodedString = this.compileWithDynamicDictionary(encoded);
     return (hexPrefix ? '0x' : '') + encodedString;
   }
 
@@ -343,6 +305,78 @@ export class CompressionCore {
 
     throw new Error('Failed to decode');
   }
+
+  //slower recursive encoding for optimal compression
+  private optimalEncode(bytes: string, l3DictionaryEnabled: boolean = true): string[] {
+    const root = this;
+    const encodingResults = new Map<string, string[]>();
+    function encodeSingle(bytes: string): string[] {
+      if (!encodingResults.has(bytes)) {
+        encodingResults.set(bytes, root.doEncode(bytes, l3DictionaryEnabled));
+      }
+      return encodingResults.get(bytes) ?? [];
+    }
+
+    const encodingAtIndex = new Map<number, string[]>();
+    function encodeRecursive(index: number): string[] {
+      if (index >= bytes.length) return [];
+      if (!encodingAtIndex.has(index)) {
+        let smallestEncoding: string[] | undefined;
+        for (let i = 64; i > 0; i -= 2) {
+          if (index + i <= bytes.length) {
+            const encoding = [...encodeSingle(bytes.substring(index, index + i)), ...encodeRecursive(index + i)];
+            if (!smallestEncoding || encoding.join('').length < smallestEncoding.join('').length) {
+              smallestEncoding = encoding;
+            }
+          }
+        }
+        encodingAtIndex.set(index, smallestEncoding ?? []);
+      }
+      return encodingAtIndex.get(index) ?? [];
+    }
+
+    //prefill encoding results
+    for (let i = 0; i < bytes.length; i += 2) {
+      for (let j = 64; j > 0; j -= 2) {
+        if (i + j <= bytes.length) encodeSingle(bytes.substring(i, i + j));
+      }
+    }
+    for (let i = bytes.length - 2; i > 0; i -= 2) encodeRecursive(i);
+
+    //recursion start
+    return encodeRecursive(0);
+  }
+
+  //build dynamic dictionary and compile encoded parts with it
+  private compileWithDynamicDictionary(encoded: string[]): string {
+    const items = new Map<string, number>();
+    for (let enc of encoded) {
+      if (items.has(enc)) items.set(enc, (items.get(enc) ?? 0) + (enc.length / 2 - 1));
+      else items.set(enc, -1);
+    }
+    const sorted = [...items.entries()].sort((a, b) => b[1] - a[1]);
+    const dictionary: string[] = [];
+    for (let i = 0; i < 32; i++) {
+      if (i < sorted.length) {
+        if (sorted[i][1] > 0) dictionary.push(sorted[i][0]);
+        else break;
+      }
+    }
+
+    //TODO: mark dynamic dictionary items for storage
+
+    //finish encoding with dynamic dictionary
+    let encodedString = toHex(dictionary.length, 1);
+    for (let ent of dictionary) {
+      encodedString += ent;
+    }
+    for (let enc of encoded) {
+      const dictRef = dictionary.indexOf(enc);
+      if (dictRef > -1) encodedString += toHex(PF_1BYTE_DICT + dictRef, 1);
+      else encodedString += enc;
+    }
+    return encodedString;
+  }
 }
 
 // Helper functions
@@ -394,7 +428,7 @@ function toHex(item: number | bigint | string, padBytes: number): string {
   return item.padStart(padBytes * 2, '0');
 }
 function toCompressedNumber(
-  bytes: string
+  bytes: string,
 ): { size: number; precision: number; decimal: number; mult: number } | undefined {
   let decimal = ethers.toBigInt('0x' + bytes).toString();
   let mult = 0;
