@@ -18,10 +18,6 @@ contract PublicStorageRegistry is IDataRegistry {
 
     constructor() {
         _transferOwnership(msg.sender);
-
-        //add a starting zero index item
-        _length = 1;
-        emit DataRegistered(0, _retrieve(0));
     }
 
     modifier onlyOwner() {
