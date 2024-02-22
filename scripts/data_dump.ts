@@ -1,15 +1,12 @@
 import hre from 'hardhat';
 import { Provider, Block } from 'ethers';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { DATA_DIRECTORY_NAME, DATA_FILE_NAME_PREFIX, ENTRY_POINT_ADDRESS } from './utils/config';
-import { FetchedHandleUserOpCalls, HandleUserOpCall, round } from './utils/utils';
+import { ENTRY_POINT_ADDRESS } from './utils/config';
+import { FetchedHandleUserOpCalls, HandleUserOpCall, readData, round, saveData } from './utils/utils';
 import { IEntryPoint } from '../typechain';
 
-const NUM_DAYS_TO_FETCH = 90;
+const NUM_DAYS_TO_FETCH = 120;
 const MAX_BLOCKS_TO_FETCH_LOGS = 1_000;
-const MAX_OVERALL_QUERIES = 25_000;
-const DATA_DIRECTORY = path.join(process.cwd(), DATA_DIRECTORY_NAME);
+const MAX_OVERALL_QUERIES = 100_000;
 
 // Main script entry
 async function main() {
@@ -22,20 +19,8 @@ async function main() {
   let queryCount = 0;
 
   //open data file
-  let data: FetchedHandleUserOpCalls[] = [];
-  try {
-    try {
-      await fs.access(DATA_DIRECTORY);
-    } catch (err) {
-      fs.mkdir(DATA_DIRECTORY);
-    }
-    const file = JSON.parse(
-      await fs.readFile(path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${hre.network.name}.json`), 'utf8'),
-    );
-    data.push(...file);
-  } catch (err) {}
-
-  if (data.length == 0) {
+  let data: FetchedHandleUserOpCalls = await readData(hre.network.name);
+  if (data.handleOpsCalls.length == 0) {
     //if data doesn't exist, fetch from the current block height
     const currentBlockNumber = await provider.getBlockNumber();
     const currentBlock = await provider.getBlock(currentBlockNumber);
@@ -50,46 +35,39 @@ async function main() {
       bottomBlockTimestamp,
       queryCount,
     );
-    data = [
-      {
-        handleOpsCalls: [...fetch.handleOpsCalls.values()].sort((a, b) => b.blockNumber - a.blockNumber),
-        fromBlock: fetch.fromBlock,
-        fromBlockTimestamp: fetch.fromBlockTimestamp,
-        toBlock: fetch.toBlock,
-        toBlockTimestamp: fetch.toBlockTimestamp,
-      },
-    ];
-  } else if (data[0].toBlockTimestamp - data[0].fromBlockTimestamp < NUM_DAYS_TO_FETCH * 24 * 60 * 60) {
+    data = {
+      handleOpsCalls: [...fetch.handleOpsCalls.values()].sort((a, b) => b.block - a.block),
+      fromBlock: fetch.fromBlock,
+      fromBlockTimestamp: fetch.fromBlockTimestamp,
+      toBlock: fetch.toBlock,
+      toBlockTimestamp: fetch.toBlockTimestamp,
+    };
+  } else if (data.toBlockTimestamp - data.fromBlockTimestamp < NUM_DAYS_TO_FETCH * 24 * 60 * 60) {
     //if data already exists, then make sure it spans the target number of days
-    const bottomBlockTimestamp = data[0].toBlockTimestamp - NUM_DAYS_TO_FETCH * 24 * 60 * 60;
+    const bottomBlockTimestamp = data.toBlockTimestamp - NUM_DAYS_TO_FETCH * 24 * 60 * 60;
     const fetch = await fetchData(
       provider,
       contract,
-      data[0].fromBlockTimestamp,
-      data[0].fromBlock,
+      data.fromBlockTimestamp,
+      data.fromBlock,
       bottomBlockTimestamp,
       queryCount,
     );
     const handleOpsCalls: Map<string, HandleUserOpCall> = new Map<string, HandleUserOpCall>();
-    for (let handleOpsCall of data[0].handleOpsCalls) handleOpsCalls.set(handleOpsCall.hash, handleOpsCall);
+    for (let handleOpsCall of data.handleOpsCalls) handleOpsCalls.set(handleOpsCall.hash, handleOpsCall);
     for (let entry of fetch.handleOpsCalls) handleOpsCalls.set(entry[0], entry[1]);
-    data = [
-      {
-        handleOpsCalls: [...handleOpsCalls.values()].sort((a, b) => b.blockNumber - a.blockNumber),
-        fromBlock: fetch.fromBlock,
-        fromBlockTimestamp: fetch.fromBlockTimestamp,
-        toBlock: data[0].toBlock,
-        toBlockTimestamp: data[0].toBlockTimestamp,
-      },
-    ];
+    data = {
+      handleOpsCalls: [...handleOpsCalls.values()],
+      fromBlock: fetch.fromBlock,
+      fromBlockTimestamp: fetch.fromBlockTimestamp,
+      toBlock: data.toBlock,
+      toBlockTimestamp: data.toBlockTimestamp,
+    };
   }
 
   //save data file
   console.log(`Writting data to file...`);
-  await fs.writeFile(
-    path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${hre.network.name}.json`),
-    JSON.stringify(data, null, 2),
-  );
+  await saveData(hre.network.name, data);
 }
 
 // Fetch data
@@ -146,10 +124,9 @@ async function fetchData(
         const tx = await block.getTransaction(logs[i].transactionIndex);
         if (tx.to === null) throw new Error(`The 'to' field was null in transaction ${logs[i].transactionHash}`);
         handleOpsCalls.set(logs[i].transactionHash, {
-          blockNumber: block.number,
-          blockTimestamp: block.timestamp,
+          block: block.number,
+          time: block.timestamp,
           hash: tx.hash.toLowerCase(),
-          to: tx.to.toLowerCase(),
           from: tx.from.toLowerCase(),
           data: tx.data.toLowerCase(),
         });

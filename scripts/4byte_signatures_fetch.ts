@@ -1,7 +1,7 @@
 import https from 'https';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { DATA_DIRECTORY } from './utils/utils';
+import { DATA_DIRECTORY, sleep } from './utils/utils';
 import { FUNCTION_SIGNATURES_FILE, SIGNATURES_4BYTE_FILE_NAME } from './utils/config';
 
 const HOST_NAME = 'www.4byte.directory';
@@ -82,13 +82,6 @@ function fetch(apiPath: string) {
     });
     req.on('error', (err) => reject(err));
     req.end();
-  });
-}
-
-// Delay
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
   });
 }
 

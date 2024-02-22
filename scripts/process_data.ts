@@ -1,16 +1,19 @@
-import hre from 'hardhat';
+import hre, { ethers } from 'hardhat';
 import { promises as fs } from 'fs';
 import { Provider } from 'ethers';
 import path from 'path';
 import { ANALYSIS_FILE_NAME_PREFIX, ENTRY_POINT_ADDRESS } from './utils/config';
-import { DATA_DIRECTORY, HandleUserOpCall, loadData, parseHandleOps, toBeArray } from './utils/utils';
+import { DATA_DIRECTORY, HandleUserOpCall, loadData, parseHandleOps, sleep, toBeArray } from './utils/utils';
+import { splitRawCalldata } from './library/calldataUtils';
 
 const OCCURENCE_THRESHOLD = 1;
-const MAX_BATCHES_PER_RUN = 10;
+const MAX_BATCHES_PER_RUN = 1;
+const REQUEST_PAUSE = 100;
 
 // Main script entry
 async function main() {
   const provider = hre.ethers.provider;
+  const providerUrl = (hre.network.config as any).url;
   const { data, daysSampled } = await loadData(hre.network.name);
   console.log('total ops: ' + data.length);
   const numSamples = Math.ceil(data.length / daysSampled);
@@ -79,7 +82,7 @@ async function main() {
       console.log('processing batch ' + i);
       const start = i * numSamples;
       const end = Math.min((i + 1) * numSamples, data.length);
-      const results = await processInterestingItems(data, start, end, provider);
+      const results = await processInterestingItems(data, start, end, provider, providerUrl);
       for (let con of results.contracts) contracts.set(con[0], (contracts.get(con[0]) || 0) + con[1]);
       for (let acc of results.accounts) accounts.set(acc[0], (accounts.get(acc[0]) || 0) + acc[1]);
       for (let c32 of results.common32) common32.set(c32[0], (common32.get(c32[0]) || 0) + c32[1]);
@@ -106,7 +109,8 @@ async function processInterestingItems(
   data: HandleUserOpCall[],
   start: number,
   end: number,
-  provider: Provider
+  provider: Provider,
+  providerUrl?: string,
 ): Promise<ProcessResults> {
   console.log(`processing for common data items`);
   const contracts = new Map<string, number>();
@@ -118,25 +122,21 @@ async function processInterestingItems(
     if ((i - start) % 1000 == 0) console.log(`collecting data ${i - start} of ${end - start}`);
     const params = parseHandleOps(contract, data[i].data);
     if (params.ops.length > 0) {
-      if (params.beneficiary.length > 2) {
-        addresses.set(params.beneficiary, (addresses.get(params.beneficiary) || 0) + 1);
+      if (params.beneficiary != '0x') {
+        addresses.set(params.beneficiary, 0);
       } else {
-        addresses.set(data[i].from, (addresses.get(data[i].from) || 0) + 1);
+        addresses.set(data[i].from, 0);
       }
 
       for (let op of params.ops) {
         const sender = op.sender.toString();
-        accounts.set(sender, (accounts.get(sender) || 0) + 1);
+        accounts.set(sender, 0);
 
         const paymaster = op.paymasterAndData.toString().substring(0, 42);
-        if (paymaster != '0x') contracts.set(paymaster, (contracts.get(paymaster) || 0) + 1);
-
-        if (op.callData.toString().length > 2) commondatas.push(toBeArray(op.callData.toString()));
-        if (op.paymasterAndData.toString().length > 42) {
-          commondatas.push(toBeArray('0x' + op.paymasterAndData.toString().substring(42)));
-        }
+        if (paymaster != '0x') contracts.set(paymaster, 0);
       }
     }
+    commondatas.push(...splitRawCalldata(data[i].data));
   }
 
   //find interesting occurences
@@ -145,7 +145,7 @@ async function processInterestingItems(
   const occurences = new Map<string, number>();
   const bytelength = 32;
   for (let i = 0; i < commondatas.length; i++) {
-    if (i % 10 == 0) console.log(`checking data ${i} of ${commondatas.length}`);
+    if (i % 1000 == 0) console.log(`checking data ${i} of ${commondatas.length}`);
     for (let j = 0; j < commondatas[i].length - bytelength; j++) {
       const startZeros = startingZeros(commondatas[i], j, j + bytelength);
       const nonZ = nonZeros(commondatas[i], j, j + bytelength);
@@ -203,13 +203,15 @@ async function processInterestingItems(
 
     if (startZeros >= 12 && startZeros < 20 && nonZ >= 10) {
       const addr = '0x' + entry[0].substring(26);
-      const hasCode = (await provider.getCode(addr)).length > 2;
+      const hasCode = await checkCode(provider, addr, providerUrl);
+      await sleep(REQUEST_PAUSE);
       if (hasCode) {
         console.log(`identified contract ${entry[0]}`);
         contracts.set(addr, entry[1]);
         removeForKnownAddress.push(entry[0]);
       } else {
-        const txCount = await provider.getTransactionCount(addr);
+        const txCount = await transactionCount(provider, addr);
+        await sleep(REQUEST_PAUSE);
         if (txCount > 0) {
           console.log(`identified account ${entry[0]}`);
           accounts.set(addr, entry[1]);
@@ -223,7 +225,8 @@ async function processInterestingItems(
   }
   for (let entry of addresses) {
     const addr = entry[0];
-    const hasCode = (await provider.getCode(addr)).length > 2;
+    const hasCode = await checkCode(provider, addr, providerUrl);
+    await sleep(REQUEST_PAUSE);
     if (hasCode) {
       console.log(`identified contract ${entry[0]}`);
       contracts.set(entry[0], entry[1]);
@@ -277,7 +280,7 @@ async function processInterestingItems(
   const occurencesAddr = new Map<string, number>();
   const bytelengthAddr = 20;
   for (let i = 0; i < commondatas.length; i++) {
-    if (i % 10 == 0) console.log(`checking data ${i} of ${commondatas.length}`);
+    if (i % 1000 == 0) console.log(`checking data ${i} of ${commondatas.length}`);
     for (let j = 0; j < commondatas[i].length - bytelengthAddr; j++) {
       const nonZ = nonZeros(commondatas[i], j, j + bytelengthAddr);
       if (nonZ > bytelengthAddr / 2) {
@@ -297,7 +300,8 @@ async function processInterestingItems(
   //remove anything that is not a contract address
   const removeForNonContract: string[] = [];
   for (let entry of occurencesAddr) {
-    const hasCode = (await provider.getCode(entry[0])).length > 2;
+    const hasCode = await checkCode(provider, entry[0], providerUrl);
+    await sleep(REQUEST_PAUSE);
     if (!hasCode) {
       console.log(`removing ${entry[0]} because it is not a contract`);
       removeForNonContract.push(entry[0]);
@@ -405,7 +409,7 @@ function occurencesAtByteLength(commondatas: Uint8Array[], bytelength: number) {
   //scan for duplicate occurences
   const occurences = new Map<string, number>();
   for (let i = 0; i < commondatas.length; i++) {
-    if (i % 10 == 0) console.log(`checking data ${i} of ${commondatas.length}`);
+    if (i % 1000 == 0) console.log(`checking data ${i} of ${commondatas.length}`);
     for (let j = 0; j < commondatas[i].length - bytelength; j++) {
       const nonZ = nonZeros(commondatas[i], j, j + bytelength);
       if (nonZ > bytelength / 2) {
@@ -441,7 +445,7 @@ async function writeToFile(
   common20: Map<string, number>,
   common16: Map<string, number>,
   common8: Map<string, number>,
-  common4: Map<string, number>
+  common4: Map<string, number>,
 ) {
   const result = {
     contracts: [...contracts.entries()].sort((a, b) => b[1] - a[1]),
@@ -452,7 +456,18 @@ async function writeToFile(
     common8: [...common8.entries()].sort((a, b) => b[1] - a[1]),
     common4: [...common4.entries()].sort((a, b) => b[1] - a[1]),
   };
-  await fs.writeFile(path.join(DATA_DIRECTORY, filename), JSON.stringify(result, null, 2));
+  const NUM_RETRIES = 8;
+  const w = async (retries: number) => {
+    if (retries > 0) {
+      try {
+        await fs.writeFile(path.join(DATA_DIRECTORY, filename), JSON.stringify(result, null, 2));
+      } catch (e) {
+        await sleep(5_000 + Math.round(Math.random() * 10_000));
+        await w(retries - 1);
+      }
+    }
+  };
+  await w(NUM_RETRIES);
 }
 async function scanDirectory(directory: string, filename: string): Promise<string[]> {
   const files = await fs.readdir(directory);
@@ -538,6 +553,36 @@ async function claimRange(numBatches: number): Promise<{
     await fs.writeFile(path.join(DATA_DIRECTORY, progressfile), '');
     return { start, end, finishedfile, progressfile, inprogress };
   }
+}
+async function checkCode(provider: Provider, address: string, providerUrl?: string): Promise<boolean> {
+  const NUM_RETRIES = 8;
+  const c = async (retries: number, provider: Provider): Promise<boolean> => {
+    try {
+      return (await provider.getCode(address)).length > 2;
+    } catch (e) {
+      if (retries == 0) throw e;
+
+      if (providerUrl) provider = new ethers.JsonRpcProvider(providerUrl);
+      await sleep(1_000 + Math.round(Math.random() * 50_000));
+      return await c(retries - 1, provider);
+    }
+  };
+  return await c(NUM_RETRIES, provider);
+}
+async function transactionCount(provider: Provider, address: string, providerUrl?: string): Promise<number> {
+  const NUM_RETRIES = 8;
+  const t = async (retries: number): Promise<number> => {
+    try {
+      return await provider.getTransactionCount(address);
+    } catch (e) {
+      if (retries == 0) throw e;
+
+      if (providerUrl) provider = new ethers.JsonRpcProvider(providerUrl);
+      await sleep(1_000 + Math.round(Math.random() * 5_000));
+      return await t(retries - 1);
+    }
+  };
+  return await t(NUM_RETRIES);
 }
 
 // Data

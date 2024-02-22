@@ -28,15 +28,15 @@ export function breakdownCalldata(calldata: string): Chunk[] {
 }
 
 // Breaks down the given calldata into identified chunks
-export function splitCalldata(calldata: string): string[] {
+export function splitRawCalldata(calldata: string): Uint8Array[] {
   initCalldataUtils();
   if (calldata.substring(0, 2) == '0x') calldata = calldata.slice(2);
 
   const chunks = bytesToChunks(calldata);
-  if (!validateChunks(calldata, chunks)) return [calldata];
+  if (!validateChunks(calldata, chunks)) return [toBeArray(calldata)];
 
-  const parts: string[] = [];
-  for (let i = 0; i < chunks.length; i++) parts.push(chunks[i].data);
+  const parts: Uint8Array[] = [];
+  for (let i = 0; i < chunks.length; i++) parts.push(toBeArray(chunks[i].data));
   return parts;
 }
 
@@ -377,4 +377,13 @@ function splitSignature(signature: string): { name: string; params: string } {
     };
   }
   throw new Error('Invalid signature text');
+}
+export function toBeArray(hex: string): Uint8Array {
+  if (hex.indexOf('0x') == 0) hex = hex.substring(2);
+  const result = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < result.length; i++) {
+    const offset = i * 2;
+    result[i] = parseInt(hex.substring(offset, offset + 2), 16);
+  }
+  return result;
 }

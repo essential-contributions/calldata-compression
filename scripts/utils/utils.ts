@@ -22,6 +22,7 @@ import { IEntryPoint, UserOperationStruct } from '../../typechain/erc-4337/IEntr
 import brotli from 'brotli';
 
 export const DATA_DIRECTORY = path.join(process.cwd(), DATA_DIRECTORY_NAME);
+const MAX_HANDLE_USER_OP_CALLS_PER_FILE = 100_000;
 
 //Data structures
 export type FetchedHandleUserOpCalls = {
@@ -30,12 +31,12 @@ export type FetchedHandleUserOpCalls = {
   fromBlockTimestamp: number;
   toBlock: number;
   toBlockTimestamp: number;
+  continuationFile?: string;
 };
 export type HandleUserOpCall = {
-  blockNumber: number;
-  blockTimestamp: number;
+  block: number;
+  time: number;
   hash: string;
-  to: string;
   from: string;
   data: string;
 };
@@ -54,19 +55,83 @@ export type HandleOpsParams = {
 };
 
 // Functions
-export async function loadData(network: string): Promise<{ data: HandleUserOpCall[]; daysSampled: number }> {
-  const datas: FetchedHandleUserOpCalls[] = [];
+export async function readData(network: string): Promise<FetchedHandleUserOpCalls> {
+  let fromBlock = 0;
+  let fromBlockTimestamp = 0;
+  let toBlock = 0;
+  let toBlockTimestamp = 0;
+  const handleOpsCalls: HandleUserOpCall[] = [];
   try {
-    const file = JSON.parse(
-      await fs.readFile(path.join(DATA_DIRECTORY, `${DATA_FILE_NAME_PREFIX}_${network}.json`), 'utf8'),
-    );
-    datas.push(...file);
-  } catch (err) {}
+    await fs.access(DATA_DIRECTORY);
+  } catch (err) {
+    fs.mkdir(DATA_DIRECTORY);
+  }
+  try {
+    let continuationFile: string | undefined = `${DATA_FILE_NAME_PREFIX}_${network}.json`;
+    while (continuationFile !== undefined) {
+      const fetched: FetchedHandleUserOpCalls = JSON.parse(
+        await fs.readFile(path.join(DATA_DIRECTORY, continuationFile), 'utf8'),
+      );
+      if (fromBlockTimestamp === 0 || fetched.fromBlockTimestamp < fromBlockTimestamp) {
+        fromBlock = fetched.fromBlock;
+        fromBlockTimestamp = fetched.fromBlockTimestamp;
+      }
+      if (fromBlockTimestamp === 0 || fetched.toBlockTimestamp > toBlockTimestamp) {
+        toBlock = fetched.toBlock;
+        toBlockTimestamp = fetched.toBlockTimestamp;
+      }
+      fetched.handleOpsCalls.forEach((call) => handleOpsCalls.push(call));
+      continuationFile = fetched.continuationFile;
+    }
+  } catch (err) {
+    console.log(err);
+  }
+  handleOpsCalls.sort((a, b) => b.block - a.block);
 
   return {
-    data: datas[0].handleOpsCalls,
-    daysSampled: (datas[0].toBlockTimestamp - datas[0].fromBlockTimestamp) / (60 * 60 * 24),
+    handleOpsCalls,
+    fromBlock,
+    fromBlockTimestamp,
+    toBlock,
+    toBlockTimestamp,
   };
+}
+export async function loadData(network: string): Promise<{ data: HandleUserOpCall[]; daysSampled: number }> {
+  const data = await readData(network);
+  return {
+    data: data.handleOpsCalls,
+    daysSampled: (data.toBlockTimestamp - data.fromBlockTimestamp) / (60 * 60 * 24),
+  };
+}
+export async function saveData(network: string, data: FetchedHandleUserOpCalls) {
+  data.handleOpsCalls.sort((a, b) => b.block - a.block);
+  const parts: FetchedHandleUserOpCalls[] = [];
+  for (let i = 0; i < data.handleOpsCalls.length; i += MAX_HANDLE_USER_OP_CALLS_PER_FILE) {
+    const end = Math.min(i + MAX_HANDLE_USER_OP_CALLS_PER_FILE, data.handleOpsCalls.length);
+    parts.push({
+      handleOpsCalls: data.handleOpsCalls.slice(i, end),
+      toBlockTimestamp: i == 0 ? data.toBlockTimestamp : data.handleOpsCalls[i].time,
+      toBlock: data.handleOpsCalls[i].block,
+      fromBlockTimestamp: data.handleOpsCalls[end - 1].time,
+      fromBlock: data.handleOpsCalls[end - 1].block,
+    });
+  }
+  for (let i = 0; i < parts.length; i++) {
+    const filename = `${DATA_FILE_NAME_PREFIX}_${network}${i > 0 ? i : ''}.json`;
+    if (i + 1 < parts.length) parts[i].continuationFile = `${DATA_FILE_NAME_PREFIX}_${network}${i + 1}.json`;
+    const NUM_RETRIES = 8;
+    const w = async (retries: number) => {
+      if (retries > 0) {
+        try {
+          await fs.writeFile(path.join(DATA_DIRECTORY, filename), JSON.stringify(parts[i], null, 2));
+        } catch (e) {
+          await sleep(5_000 + Math.round(Math.random() * 10_000));
+          await w(retries - 1);
+        }
+      }
+    };
+    await w(NUM_RETRIES);
+  }
 }
 export async function recommendDictionaries(
   network: string,
@@ -287,4 +352,9 @@ export function hasInitcode(ops: UserOperationStruct[]): boolean {
     if (op.initCode.length > 2) return true;
   }
   return false;
+}
+export function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

@@ -19,7 +19,7 @@ async function main() {
   const signer = new hre.ethers.Wallet(hre.ethers.hexlify(hre.ethers.randomBytes(32))).connect(provider);
   const { data, daysSampled } = await loadData(hre.network.name);
   const dictionaries = await recommendDictionaries(hre.network.name, daysSampled);
-  data.sort((a, b) => a.blockTimestamp - b.blockTimestamp);
+  data.sort((a, b) => a.time - b.time);
 
   //get compression results
   const compression = new CompressionTest();
@@ -51,7 +51,7 @@ async function main() {
       const d = await serialized(data[i].data, signer);
       const dl = (d.length - 2) / 2;
       const dg = calcL1Gas(d, hre.network.name);
-      const c = await serialized(compression.encode(data[i].data), signer);
+      const c = await serialized(compression.encodeFast(data[i].data), signer);
       const cl = (c.length - 2) / 2;
       const cg = calcL1Gas(c, hre.network.name);
 
@@ -72,7 +72,7 @@ async function main() {
           ' ratio - ' +
           `${Math.abs(gasRatio)}%`.padEnd(6, ' ') +
           ` ${gasRatioText} - ` +
-          `${remain}s remaining`
+          `${remain}s remaining`,
       );
 
       if (minGasRatio == 0 || gasRatio < minGasRatio) minGasRatio = gasRatio;
@@ -86,7 +86,7 @@ async function main() {
   console.log('');
 
   const avgGasRatio = round(
-    (Number(avgUncompressedL1GasPerOp - avgCompressedL1GasPerOp) / Number(avgUncompressedL1GasPerOp)) * 100
+    (Number(avgUncompressedL1GasPerOp - avgCompressedL1GasPerOp) / Number(avgUncompressedL1GasPerOp)) * 100,
   );
   const avgUncompressedL1GasCost = priceL1Gas(avgUncompressedL1GasPerOp, hre.network.name);
   const totalOperatingCost = round(avgUncompressedL1GasCost * opscount);
