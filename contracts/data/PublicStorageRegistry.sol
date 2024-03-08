@@ -47,7 +47,7 @@ contract PublicStorageRegistry is IDataRegistry {
     }
 
     function register(address item) external payable returns (uint256) {
-        require(_length < uint256(2 ^ 32), "Registry is full");
+        require(_length < uint256(2 ** 32), "Registry is full");
         require(item != address(0), "Cannot register the zero address");
         require(msg.value >= _registrationFee, "Insufficient registration fee");
 
